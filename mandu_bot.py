@@ -1,14 +1,19 @@
+# main.py
+import os, time, logging
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
 from telegram import ParseMode
-import logging
+from telegram.utils.request import Request
 
-# === YOUR BOT TOKEN ===
-BOT_TOKEN = "8542028079:AAFNi6Tc_WJOXDrgYSN67e1W_MEbXZjCOdI"  # Replace with your BotFather token
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger("MANDU-BOT")
 
-# === Logging ===
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+BOT_TOKEN = os.getenv("BOT_TOKEN")  # Render 환경변수에서 주입
+if not BOT_TOKEN:
+    raise RuntimeError("BOT_TOKEN env var is missing")
 
-# === Command Handlers ===
 def start(update, context):
     update.message.reply_text(
         "👋 Welcome to the MANDU Official Community!\n\n"
@@ -44,31 +49,35 @@ def social(update, context):
         parse_mode=ParseMode.MARKDOWN
     )
 
-# === Welcome message for new members ===
 def welcome(update, context):
-    for member in update.message.new_chat_members:
+    for m in update.message.new_chat_members:
         context.bot.send_message(
             chat_id=update.effective_chat.id,
-            text=f"👋 Welcome {member.first_name}! Welcome to the MANDU Community!"
+            text=f"👋 Welcome {m.first_name}! Welcome to the MANDU Community!"
         )
 
-def main():
-    updater = Updater(BOT_TOKEN, use_context=True)
-    dp = updater.dispatcher
+def run():
+    # 네트워크 끊김 대비 타임아웃 설정
+    req = Request(connect_timeout=20, read_timeout=30)
+    updater = Updater(BOT_TOKEN, request_kwargs={'con_pool_size': 8}, use_context=True)
 
-    # Command handlers
+    dp = updater.dispatcher
     dp.add_handler(CommandHandler("start", start))
     dp.add_handler(CommandHandler("map", roadmap))
     dp.add_handler(CommandHandler("whitepaper", whitepaper))
     dp.add_handler(CommandHandler("website", website))
     dp.add_handler(CommandHandler("social", social))
-
-    # New member welcome
     dp.add_handler(MessageHandler(Filters.status_update.new_chat_members, welcome))
 
-    print("🤖 MANDU Bot is running...")
-    updater.start_polling()
+    logger.info("🤖 MANDU Bot is starting polling...")
+    updater.start_polling(clean=True)   # clean=True: 이전 업데이트 비움
     updater.idle()
 
 if __name__ == "__main__":
-    main()
+    # 예외 발생해도 Render가 재시작하지만, 짧게 재시도 루프 한 번 더.
+    while True:
+        try:
+            run()
+        except Exception as e:
+            logging.exception("Bot crashed, restarting in 5s: %s", e)
+            time.sleep(5)
