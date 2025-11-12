@@ -1,2 +1,4 @@
-# mandu-telegram-bot
-Official MANDU Telegram Bot (by NOVA LAB)
+# MANDU Telegram Bot
+- python-telegram-bot 13.x
+- Start: python main.py
+- Env: BOT_TOKEN=<your-token>
