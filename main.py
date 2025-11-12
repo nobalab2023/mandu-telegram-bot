@@ -2,7 +2,6 @@
 import os, time, logging
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
 from telegram import ParseMode
-from telegram.utils.request import Request
 
 logging.basicConfig(
     level=logging.INFO,
@@ -10,7 +9,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger("MANDU-BOT")
 
-BOT_TOKEN = os.getenv("BOT_TOKEN")  # Render 환경변수에서 주입
+BOT_TOKEN = os.getenv("BOT_TOKEN")
 if not BOT_TOKEN:
     raise RuntimeError("BOT_TOKEN env var is missing")
 
@@ -57,9 +56,16 @@ def welcome(update, context):
         )
 
 def run():
-    # 네트워크 끊김 대비 타임아웃 설정
-    req = Request(connect_timeout=20, read_timeout=30)
-    updater = Updater(BOT_TOKEN, request_kwargs={'con_pool_size': 8}, use_context=True)
+    # 타임아웃/커넥션 풀 설정은 request_kwargs로 전달
+    updater = Updater(
+        BOT_TOKEN,
+        use_context=True,
+        request_kwargs={
+            "con_pool_size": 8,
+            "connect_timeout": 20,
+            "read_timeout": 30,
+        },
+    )
 
     dp = updater.dispatcher
     dp.add_handler(CommandHandler("start", start))
@@ -70,14 +76,13 @@ def run():
     dp.add_handler(MessageHandler(Filters.status_update.new_chat_members, welcome))
 
     logger.info("🤖 MANDU Bot is starting polling...")
-    updater.start_polling(clean=True)   # clean=True: 이전 업데이트 비움
+    updater.start_polling(clean=True)
     updater.idle()
 
 if __name__ == "__main__":
-    # 예외 발생해도 Render가 재시작하지만, 짧게 재시도 루프 한 번 더.
     while True:
         try:
             run()
         except Exception as e:
-            logging.exception("Bot crashed, restarting in 5s: %s", e)
+            logger.exception("Bot crashed, restarting in 5s: %s", e)
             time.sleep(5)
